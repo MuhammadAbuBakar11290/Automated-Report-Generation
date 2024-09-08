@@ -1,24 +1,23 @@
 from reportlab.lib.pagesizes import A4
 from reportlab.lib import colors
 from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
-from reportlab.lib.enums import TA_LEFT, TA_CENTER, TA_RIGHT
-from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer, Table, TableStyle, Frame
+from reportlab.lib.enums import TA_LEFT, TA_CENTER
+from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer, Table, TableStyle
 from reportlab.lib.units import inch
 from reportlab.pdfgen import canvas
 from PIL import Image, ImageDraw
 from datetime import datetime
 
 # Function to create a circular image
-def create_circular_image(input_image_path, output_image_path):
+def create_circular_image(input_image_path, output_image_path): 
     im = Image.open(input_image_path).convert("RGBA")
     bigsize = (im.size[0] * 3, im.size[1] * 3)
     mask = Image.new("L", bigsize, 0)
     draw = ImageDraw.Draw(mask)
     draw.ellipse((0, 0) + bigsize, fill=255)
-    mask = mask.resize(im.size, Image.Resampling.LANCZOS)  # Use LANCZOS for resizing
+    mask = mask.resize(im.size, Image.Resampling.LANCZOS)
     im.putalpha(mask)
     im.save(output_image_path)
-
 
 # Function to create the patient summary PDF
 def create_patient_summary(output_file, doc_name, patient_name, patient_cnic, patient_gender, age, disease_detected, medicine_recommendations, special_instructions, hospital_name, hospital_logo):
@@ -31,16 +30,16 @@ def create_patient_summary(output_file, doc_name, patient_name, patient_cnic, pa
 
     # Styles
     styles = getSampleStyleSheet()
-    header_style = ParagraphStyle(name='Header', fontSize=22, fontName='Helvetica-Bold', alignment=TA_CENTER, spaceAfter=12, backColor='#D6E4F0', borderPadding=8)
+    header_style = ParagraphStyle(name='Header', fontSize=22, fontName='Helvetica-Bold', alignment=TA_CENTER, spaceAfter=12)
     subheader_style = ParagraphStyle(name='Subheader', fontSize=12, fontName='Helvetica-Bold', alignment=TA_LEFT)
     normal_style = ParagraphStyle(name='Normal', fontSize=10, fontName='Helvetica', alignment=TA_LEFT, spaceAfter=12)
 
     # Create a story (list of elements) for the document
     story = []
 
-    # Add the main heading
+    # Add the main heading at the top
     story.append(Paragraph("Patient Report", header_style))
-    story.append(Spacer(1, 12))  # Spacer for visual separation
+    story.append(Spacer(1, 12))
 
     # Add hospital logo and name
     story.append(Paragraph(f'<img src="{circular_logo_path}" width="50" height="50"/> {hospital_name}', subheader_style))
@@ -52,12 +51,12 @@ def create_patient_summary(output_file, doc_name, patient_name, patient_cnic, pa
     story.append(Paragraph(f"Date: {date_today}", subheader_style))
     story.append(Spacer(1, 12))
 
-    # Patient demographics table
+    # Patient demographics table with adjusted column widths
     data = [
         ["Patient Name", "Patient CNIC", "Gender", "Age"],
         [patient_name, patient_cnic, patient_gender, age]
     ]
-    table = Table(data, colWidths=[2.5 * inch] * 4)
+    table = Table(data, colWidths=[2 * inch, 3 * inch, 1 * inch, 0.8 * inch])
     table.setStyle(TableStyle([
         ('BACKGROUND', (0, 0), (-1, 0), colors.lightblue),
         ('TEXTCOLOR', (0, 0), (-1, 0), colors.black),
@@ -77,17 +76,37 @@ def create_patient_summary(output_file, doc_name, patient_name, patient_cnic, pa
     story.append(Paragraph(disease_detected, normal_style))
     story.append(Spacer(1, 12))
 
-    # Add medicine recommendations section
+    # Add medicine recommendations section with grey background
     story.append(Paragraph("Medicine Recommendations", subheader_style))
     story.append(Spacer(1, 6))
     for medicine in medicine_recommendations:
-        story.append(Paragraph(medicine, normal_style))
+        story.append(Paragraph(f'<b>{medicine}</b>', normal_style, bulletText='-'))
     story.append(Spacer(1, 12))
 
-    # Add special instructions section
+    # Add grey background for medicine section
+    table_medicine = Table([[Paragraph(medicine, normal_style)] for medicine in medicine_recommendations], colWidths=[5.5 * inch])
+    table_medicine.setStyle(TableStyle([
+        ('BACKGROUND', (0, 0), (-1, -1), colors.lightgrey),
+        ('ALIGN', (0, 0), (-1, -1), 'CENTER'),
+        ('VALIGN', (0, 0), (-1, -1), 'MIDDLE'),
+        ('FONTSIZE', (0, 0), (-1, -1), 10)
+    ]))
+    story.append(table_medicine)
+    story.append(Spacer(1, 12))
+
+    # Add special instructions section with grey background
     story.append(Paragraph("Special Instructions", subheader_style))
     story.append(Spacer(1, 6))
     story.append(Paragraph(special_instructions, normal_style))
+    
+    table_instructions = Table([[Paragraph(special_instructions, normal_style)]], colWidths=[5.5 * inch])
+    table_instructions.setStyle(TableStyle([
+        ('BACKGROUND', (0, 0), (-1, -1), colors.lightgrey),
+        ('ALIGN', (0, 0), (-1, -1), 'CENTER'),
+        ('VALIGN', (0, 0), (-1, -1), 'MIDDLE'),
+        ('FONTSIZE', (0, 0), (-1, -1), 10)
+    ]))
+    story.append(table_instructions)
 
     # Build the PDF
     doc.build(story)
@@ -103,6 +122,6 @@ if __name__ == "__main__":
     medicine_recommendations = ["Calpol 25mg", "Panadol 2 tablets"]
     special_instructions = "Stay hydrated and rest."
     hospital_name = "City Hospital"
-    hospital_logo = "Logo.png"  # Path to your logo
+    hospital_logo = "Logo.png"  # Path to your uploaded logo
 
     create_patient_summary("patient_summary_report.pdf", doc_name, patient_name, patient_cnic, patient_gender, age, disease_detected, medicine_recommendations, special_instructions, hospital_name, hospital_logo)
