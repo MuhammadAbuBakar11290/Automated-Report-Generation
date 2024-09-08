@@ -2,20 +2,19 @@ from reportlab.lib.pagesizes import A4
 from reportlab.lib import colors
 from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
 from reportlab.lib.enums import TA_LEFT, TA_CENTER
-from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer, Table, TableStyle
-from reportlab.lib.units import inch
-from reportlab.pdfgen import canvas
-from PIL import Image, ImageDraw
+from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer, Table, TableStyle, Image
+from PIL import Image as PILImage, ImageDraw
 from datetime import datetime
+from reportlab.lib.units import inch
 
 # Function to create a circular image
 def create_circular_image(input_image_path, output_image_path): 
-    im = Image.open(input_image_path).convert("RGBA")
+    im = PILImage.open(input_image_path).convert("RGBA")
     bigsize = (im.size[0] * 3, im.size[1] * 3)
-    mask = Image.new("L", bigsize, 0)
+    mask = PILImage.new("L", bigsize, 0)
     draw = ImageDraw.Draw(mask)
     draw.ellipse((0, 0) + bigsize, fill=255)
-    mask = mask.resize(im.size, Image.Resampling.LANCZOS)
+    mask = mask.resize(im.size, PILImage.Resampling.LANCZOS)
     im.putalpha(mask)
     im.save(output_image_path)
 
@@ -33,6 +32,7 @@ def create_patient_summary(output_file, doc_name, patient_name, patient_cnic, pa
     header_style = ParagraphStyle(name='Header', fontSize=22, fontName='Helvetica-Bold', alignment=TA_CENTER, spaceAfter=12)
     subheader_style = ParagraphStyle(name='Subheader', fontSize=12, fontName='Helvetica-Bold', alignment=TA_LEFT)
     normal_style = ParagraphStyle(name='Normal', fontSize=10, fontName='Helvetica', alignment=TA_LEFT, spaceAfter=12)
+    logo_style = ParagraphStyle(name='LogoStyle', alignment=TA_CENTER)
 
     # Create a story (list of elements) for the document
     story = []
@@ -41,14 +41,12 @@ def create_patient_summary(output_file, doc_name, patient_name, patient_cnic, pa
     story.append(Paragraph("Patient Report", header_style))
     story.append(Spacer(1, 12))
 
-    # Add hospital logo and name
-    story.append(Paragraph(f'<img src="{circular_logo_path}" width="50" height="50"/> {hospital_name}', subheader_style))
-    story.append(Spacer(1, 12))
-
-    # Add doctor name and date
-    date_today = datetime.now().strftime("%B %d, %Y")
-    story.append(Paragraph(f"Doctor: {doc_name}", subheader_style))
-    story.append(Paragraph(f"Date: {date_today}", subheader_style))
+    # Add hospital logo and name, doctor name, and date separately
+    story.append(Image(circular_logo_path, width=60, height=60))
+    story.append(Spacer(1, 6))
+    story.append(Paragraph(hospital_name, subheader_style))
+    story.append(Paragraph(f'Doctor: {doc_name}', subheader_style))
+    story.append(Paragraph(f'Date: {datetime.now().strftime("%B %d, %Y")}', subheader_style))
     story.append(Spacer(1, 12))
 
     # Patient demographics table with adjusted column widths
@@ -79,11 +77,6 @@ def create_patient_summary(output_file, doc_name, patient_name, patient_cnic, pa
     # Add medicine recommendations section with grey background
     story.append(Paragraph("Medicine Recommendations", subheader_style))
     story.append(Spacer(1, 6))
-    for medicine in medicine_recommendations:
-        story.append(Paragraph(f'<b>{medicine}</b>', normal_style, bulletText='-'))
-    story.append(Spacer(1, 12))
-
-    # Add grey background for medicine section
     table_medicine = Table([[Paragraph(medicine, normal_style)] for medicine in medicine_recommendations], colWidths=[5.5 * inch])
     table_medicine.setStyle(TableStyle([
         ('BACKGROUND', (0, 0), (-1, -1), colors.lightgrey),
@@ -97,8 +90,6 @@ def create_patient_summary(output_file, doc_name, patient_name, patient_cnic, pa
     # Add special instructions section with grey background
     story.append(Paragraph("Special Instructions", subheader_style))
     story.append(Spacer(1, 6))
-    story.append(Paragraph(special_instructions, normal_style))
-    
     table_instructions = Table([[Paragraph(special_instructions, normal_style)]], colWidths=[5.5 * inch])
     table_instructions.setStyle(TableStyle([
         ('BACKGROUND', (0, 0), (-1, -1), colors.lightgrey),
