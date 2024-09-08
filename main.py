@@ -1,14 +1,15 @@
 from reportlab.lib.pagesizes import A4
-from reportlab.lib import colors
-from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
-from reportlab.lib.enums import TA_LEFT, TA_CENTER
 from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer, Table, TableStyle, Image
-from PIL import Image as PILImage, ImageDraw
+from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle, TA_CENTER, TA_LEFT, TA_RIGHT
+from reportlab.lib import colors
+from reportlab.lib.units import cm
 from datetime import datetime
-from reportlab.lib.units import inch
+import os
+from PIL import Image as PILImage, ImageDraw
+
 
 # Function to create a circular image
-def create_circular_image(input_image_path, output_image_path): 
+def create_circular_image(input_image_path, output_image_path):
     im = PILImage.open(input_image_path).convert("RGBA")
     bigsize = (im.size[0] * 3, im.size[1] * 3)
     mask = PILImage.new("L", bigsize, 0)
@@ -18,101 +19,111 @@ def create_circular_image(input_image_path, output_image_path):
     im.putalpha(mask)
     im.save(output_image_path)
 
-# Function to create the patient summary PDF
-def create_patient_summary(output_file, doc_name, patient_name, patient_cnic, patient_gender, age, disease_detected, medicine_recommendations, special_instructions, hospital_name, hospital_logo):
-    # Create circular hospital logo
-    circular_logo_path = "circular_logo.png"
-    create_circular_image(hospital_logo, circular_logo_path)
+def create_patient_summary(filename, doc_name, patient_name, patient_cnic, patient_gender, age, nationality, disease_detected, medicine_recommendations, special_instructions, hospital_name, hospital_logo):
+    # Create PDF document
+    doc = SimpleDocTemplate(filename, pagesize=A4)
+    content = []
 
-    # Create the PDF document
-    doc = SimpleDocTemplate(output_file, pagesize=A4)
-
-    # Styles
+    # Define styles
     styles = getSampleStyleSheet()
-    header_style = ParagraphStyle(name='Header', fontSize=22, fontName='Helvetica-Bold', alignment=TA_CENTER, spaceAfter=12)
-    subheader_style = ParagraphStyle(name='Subheader', fontSize=12, fontName='Helvetica-Bold', alignment=TA_LEFT)
+    header_style = ParagraphStyle(name='Header', fontSize=24, fontName='Helvetica-Bold', alignment=TA_CENTER, spaceAfter=12, backColor='#D6E4F0', borderPadding=25)
+    subheader_style = ParagraphStyle(name='Subheader', fontSize=12, fontName='Helvetica-Bold', alignment=TA_LEFT, spaceAfter=6, spaceBefore=6)
     normal_style = ParagraphStyle(name='Normal', fontSize=10, fontName='Helvetica', alignment=TA_LEFT, spaceAfter=12)
-    logo_style = ParagraphStyle(name='LogoStyle', alignment=TA_CENTER)
+    medicine_style = ParagraphStyle(name='Medicine', fontSize=10, fontName='Helvetica', alignment=TA_LEFT, spaceAfter=12, backColor='#F2F2F2')
+    special_instructions_style = ParagraphStyle(name='SpecialInstructions', fontSize=10, fontName='Helvetica', alignment=TA_LEFT, spaceAfter=12, backColor='#F2F2F2')
 
-    # Create a story (list of elements) for the document
-    story = []
+    # Add the main heading (centered)
+    content.append(Paragraph("Patient Report", header_style))
+    content.append(Spacer(1, 12))  # Spacer for visual separation
 
-    # Add the main heading at the top
-    story.append(Paragraph("Patient Report", header_style))
-    story.append(Spacer(1, 12))
+    # Create a table for logo and hospital name
+    logo_image = None
+    if hospital_logo and os.path.exists(hospital_logo):
+        logo_image = Image(hospital_logo, width=5*cm, height=5*cm)
 
-    # Add hospital logo and name, doctor name, and date separately
-    story.append(Image(circular_logo_path, width=60, height=60))
-    story.append(Spacer(1, 6))
-    story.append(Paragraph(hospital_name, subheader_style))
-    story.append(Paragraph(f'Doctor: {doc_name}', subheader_style))
-    story.append(Paragraph(f'Date: {datetime.now().strftime("%B %d, %Y")}', subheader_style))
-    story.append(Spacer(1, 12))
+    # Create a row for the logo and hospital name
+    logo_and_hospital_name_data = [
+        [logo_image, Paragraph(f"<b>{hospital_name}</b>", normal_style)]
+    ]
+    
+    logo_and_hospital_name_table = Table(logo_and_hospital_name_data, colWidths=[5*cm, 10*cm])  # Adjust column widths as needed
+    logo_and_hospital_name_table.setStyle(TableStyle([
+        ('ALIGN', (0, 0), (0, 0), 'LEFT'),   # Align logo to the left
+        ('ALIGN', (1, 0), (1, 0), 'LEFT')    # Align hospital name to the left
+    ]))
+    
+    content.append(logo_and_hospital_name_table)
+    content.append(Spacer(1, 6))
 
-    # Patient demographics table with adjusted column widths
+    # Add doctor name on the left and date on the right
+    doctor_and_date_data = [
+        [Paragraph(f"Doctor: {doc_name}", normal_style), 
+         Paragraph(f"Date: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}", normal_style)]
+    ]
+    
+    doctor_and_date_table = Table(doctor_and_date_data, colWidths=[9*cm, 6*cm])  # Adjust column widths
+    doctor_and_date_table.setStyle(TableStyle([
+        ('ALIGN', (0, 0), (0, 0), 'LEFT'),   # Align doctor name to the left
+        ('ALIGN', (1, 0), (1, 0), 'RIGHT')   # Align date to the right
+    ]))
+
+    content.append(doctor_and_date_table)
+    content.append(Spacer(1, 12))
+
+    # Patient Demographics Header
+    content.append(Paragraph("Patient Demographics", subheader_style))
+    content.append(Spacer(1, 12))
+
+    # Patient Demographics Table
     data = [
         ["Patient Name", "Patient CNIC", "Gender", "Age"],
         [patient_name, patient_cnic, patient_gender, age]
     ]
-    table = Table(data, colWidths=[2 * inch, 3 * inch, 1 * inch, 0.8 * inch])
-    table.setStyle(TableStyle([
-        ('BACKGROUND', (0, 0), (-1, 0), colors.lightblue),
-        ('TEXTCOLOR', (0, 0), (-1, 0), colors.black),
+    
+    table_style = TableStyle([
+        ('BACKGROUND', (0, 0), (-1, 0), colors.grey),
+        ('TEXTCOLOR', (0, 0), (-1, 0), colors.white),
         ('ALIGN', (0, 0), (-1, -1), 'CENTER'),
-        ('FONTNAME', (0, 0), (-1, 0), 'Helvetica-Bold'),
-        ('FONTSIZE', (0, 0), (-1, 0), 12),
-        ('BOTTOMPADDING', (0, 0), (-1, 0), 12),
-        ('BACKGROUND', (0, 1), (-1, -1), colors.whitesmoke),
         ('GRID', (0, 0), (-1, -1), 1, colors.black),
-    ]))
-    story.append(table)
-    story.append(Spacer(1, 12))
-
-    # Add the disease detected section
-    story.append(Paragraph("Disease Detected", subheader_style))
-    story.append(Spacer(1, 6))
-    story.append(Paragraph(disease_detected, normal_style))
-    story.append(Spacer(1, 12))
-
-    # Add medicine recommendations section with grey background
-    story.append(Paragraph("Medicine Recommendations", subheader_style))
-    story.append(Spacer(1, 6))
-    table_medicine = Table([[Paragraph(medicine, normal_style)] for medicine in medicine_recommendations], colWidths=[5.5 * inch])
-    table_medicine.setStyle(TableStyle([
-        ('BACKGROUND', (0, 0), (-1, -1), colors.lightgrey),
-        ('ALIGN', (0, 0), (-1, -1), 'CENTER'),
         ('VALIGN', (0, 0), (-1, -1), 'MIDDLE'),
-        ('FONTSIZE', (0, 0), (-1, -1), 10)
-    ]))
-    story.append(table_medicine)
-    story.append(Spacer(1, 12))
+        ('FONT', (0, 0), (-1, 0), 'Helvetica-Bold'),
+        ('FONT', (0, 1), (-1, -1), 'Helvetica')
+    ])
+    
+    table = Table(data, colWidths=[4.5*cm, 4.5*cm, 4.5*cm, 4.5*cm])
+    table.setStyle(table_style)
+    
+    content.append(table)
+    content.append(Spacer(1, 12))
 
-    # Add special instructions section with grey background
-    story.append(Paragraph("Special Instructions", subheader_style))
-    story.append(Spacer(1, 6))
-    table_instructions = Table([[Paragraph(special_instructions, normal_style)]], colWidths=[5.5 * inch])
-    table_instructions.setStyle(TableStyle([
-        ('BACKGROUND', (0, 0), (-1, -1), colors.lightgrey),
-        ('ALIGN', (0, 0), (-1, -1), 'CENTER'),
-        ('VALIGN', (0, 0), (-1, -1), 'MIDDLE'),
-        ('FONTSIZE', (0, 0), (-1, -1), 10)
-    ]))
-    story.append(table_instructions)
+    # Disease Detected Section
+    content.append(Paragraph(f"<b>Disease Detected:</b> {disease_detected}", subheader_style))
+    content.append(Spacer(1, 12))
 
-    # Build the PDF
-    doc.build(story)
+    # Medicine Recommendations
+    medicine_list = '\n'.join([f"{i+1}. {med}" for i, med in enumerate(medicine_recommendations)])
+    medicine_recommendations_paragraph = Paragraph(f"<b>Medicine Recommendations:</b><br/>{medicine_list}", medicine_style)
+    content.append(medicine_recommendations_paragraph)
+    content.append(Spacer(1, 12))
+
+    # Special Instructions
+    special_instructions_paragraph = Paragraph(f"<b>Special Instructions:</b><br/>{special_instructions}", special_instructions_style)
+    content.append(special_instructions_paragraph)
+
+    # Build PDF
+    doc.build(content)
 
 # Example usage
-if __name__ == "__main__":
-    doc_name = "Dr. John Doe"
-    patient_name = "Muhammad AbuBakar"
-    patient_cnic = "12345-6789012-3"
-    patient_gender = "Male"
-    age = "25"
-    disease_detected = "Flu"
-    medicine_recommendations = ["Calpol 25mg", "Panadol 2 tablets"]
-    special_instructions = "Stay hydrated and rest."
-    hospital_name = "City Hospital"
-    hospital_logo = "Logo.png"  # Path to your uploaded logo
+doc_name = "Dr. John Doe"
+patient_name = "Alice Smith"
+patient_cnic = "1234567890"
+patient_gender = "Female"
+age = "30"
+nationality = "American"
+disease_detected = "Pneumonia"
+medicine_recommendations = ["Calpol 25mg", "Panadol 2 tablets"]
+special_instructions = "Rest for 7 days, avoid strenuous activity"
+hospital_name = "St. Elizabeth Hospital"
+hospital_logo = "Logo.png"  # Ensure this file exists
 
-    create_patient_summary("patient_summary_report.pdf", doc_name, patient_name, patient_cnic, patient_gender, age, disease_detected, medicine_recommendations, special_instructions, hospital_name, hospital_logo)
+create_patient_summary("patient_summary_report.pdf", doc_name, patient_name, patient_cnic, patient_gender, age, nationality, disease_detected, medicine_recommendations, special_instructions, hospital_name, hospital_logo)
